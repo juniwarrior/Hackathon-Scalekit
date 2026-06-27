@@ -751,7 +751,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
 function AgentNarrativeCard({ narrative }: { narrative: WeeklyReportNarrative }) {
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-primary/15 bg-primary/10 px-4 py-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">Multi-agent weekly report</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">{narrative.sections.length} specialist agents · lead synthesis</p>
@@ -794,7 +794,7 @@ function AgentActivityCard({ invocations }: { invocations: ToolInvocation[] }) {
   const shown = expanded ? invocations : invocations.slice(0, DEFAULT_CARD_ROWS);
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3">
+      <div className="flex items-start justify-between gap-3 border-b border-emerald-100 bg-emerald-50 px-4 py-3">
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">Autonomous agent activity</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
@@ -842,15 +842,41 @@ function AgentStatusBadge({ status }: { status: string }) {
   return <Badge tone={tone}>{status}</Badge>;
 }
 
+function cardHeaderTone(tool: AgentToolId): string {
+  switch (tool) {
+    case "reservations":
+      return "bg-blue-50 border-blue-100";
+    case "clients":
+      return "bg-emerald-50 border-emerald-100";
+    case "inventory":
+      return "bg-amber-50 border-amber-100";
+    case "staff":
+      return "bg-violet-50 border-violet-100";
+    case "purchase_order":
+      return "bg-orange-50 border-orange-100";
+    case "promotions":
+      return "bg-rose-50 border-rose-100";
+    case "allergens":
+      return "bg-red-50 border-red-100";
+    case "revenue":
+      return "bg-teal-50 border-teal-100";
+    case "memory":
+      return "bg-indigo-50 border-indigo-100";
+    case "summary":
+    default:
+      return "bg-primary/10 border-primary/15";
+  }
+}
+
 function AgentCardView({ card }: { card: AgentCard }) {
   return (
     <Card className="overflow-hidden">
-      <div className="flex items-start justify-between gap-3 border-b border-border bg-muted/50 px-4 py-3">
+      <div className={cn("flex items-start justify-between gap-3 border-b px-4 py-3", cardHeaderTone(card.tool))}>
         <div className="min-w-0">
           <h3 className="text-sm font-semibold text-foreground">{card.title}</h3>
           {card.subtitle ? <p className="mt-0.5 truncate text-xs text-muted-foreground">{card.subtitle}</p> : null}
         </div>
-        <span className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+        <span className="flex shrink-0 items-center gap-1 rounded-md border border-border bg-white/70 px-2 py-0.5 text-[11px] font-medium text-foreground/70">
           <Database className="h-3 w-3" />
           {card.toolLabel}
         </span>
