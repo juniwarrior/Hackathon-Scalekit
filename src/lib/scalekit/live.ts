@@ -155,3 +155,73 @@ export async function executeTool(
     return null;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Live reads — the agent retrieves from the real connected apps        */
+/* ------------------------------------------------------------------ */
+
+interface ExecResult {
+  data?: unknown;
+}
+
+function payload(out: unknown): Record<string, unknown> | null {
+  if (!out || typeof out !== "object") return null;
+  const maybe = out as ExecResult;
+  const target = maybe.data && typeof maybe.data === "object" ? maybe.data : out;
+  return target as Record<string, unknown>;
+}
+
+export interface LiveRead {
+  count: number;
+  items: string[];
+  source: string;
+}
+
+/** Reservations from Google Calendar. */
+export async function readReservations(): Promise<LiveRead | null> {
+  const out = await executeTool("google_calendar", "googlecalendar_list_events", {
+    time_min: "2026-06-29T00:00:00-07:00",
+    time_max: "2026-07-06T00:00:00-07:00",
+    max_results: 50,
+  });
+  const events = payload(out)?.events;
+  if (!Array.isArray(events)) return null;
+  const items = events.map((e) => {
+    const ev = e as { summary?: string; description?: string };
+    return `${ev.summary ?? "Event"}${ev.description ? ` · ${ev.description}` : ""}`;
+  });
+  return { count: items.length, items, source: "Google Calendar" };
+}
+
+/** Inventory from the Google Sheet. */
+export async function readInventory(): Promise<LiveRead | null> {
+  const spreadsheetId = process.env.SCALEKIT_SHEET_ID;
+  if (!spreadsheetId) return null;
+  const out = await executeTool("google_sheets", "googlesheets_get_values", {
+    spreadsheet_id: spreadsheetId,
+    range: process.env.SCALEKIT_SHEET_RANGE || "A1:G50",
+  });
+  const values = payload(out)?.values;
+  if (!Array.isArray(values)) return null;
+  const rows = (values as unknown[][]).slice(1);
+  const items = rows.map((r) => `${r[0]} — order ${r[2]} kg · $${r[3]} · ${r[4]} delivery`);
+  return { count: items.length, items, source: "Google Sheets" };
+}
+
+/** Clients from the Airtable base. */
+export async function readClients(): Promise<LiveRead | null> {
+  const out = await executeTool("crm", "airtable_list_records", {
+    base_id: process.env.SCALEKIT_AIRTABLE_BASE_ID || "app16GbpVxwWBSRCp",
+    table_id_or_name: process.env.SCALEKIT_AIRTABLE_TABLE || "Clientes",
+    maxRecords: 50,
+  });
+  const records = payload(out)?.records;
+  if (!Array.isArray(records)) return null;
+  const items = records.map((rec) => {
+    const f = ((rec as { fields?: Record<string, unknown> }).fields ?? {}) as Record<string, string>;
+    const notes = f["Notas Internas"] ? ` · ${f["Notas Internas"]}` : "";
+    const allergy = f["Alergias"] ? ` · ${f["Alergias"]}` : "";
+    return `${f["Nombre"] ?? "Client"} — ${f["Tipo de Cliente"] ?? ""}${allergy}${notes}`;
+  });
+  return { count: items.length, items, source: "Airtable" };
+}

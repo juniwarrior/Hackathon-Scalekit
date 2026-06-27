@@ -35,7 +35,7 @@ import {
   sectionToTool,
 } from "@/lib/oyechef-agent/agent";
 import type { AgentCard, AgentToolId, EmployeeHistory } from "@/lib/oyechef-agent/agent";
-import { planWeekAutonomously, runToolThroughGateway } from "@/lib/oyechef-agent/orchestrator";
+import { planWeekAutonomously } from "@/lib/oyechef-agent/orchestrator";
 import type { WeeklyReportNarrative } from "@/lib/oyechef-agent/multi-agent";
 import type { ToolInvocation } from "@/lib/scalekit/gateway";
 import { getCurrentDemoDataSet } from "@/lib/oyechef-agent/mock-data";
@@ -170,18 +170,9 @@ export function OyeChefDashboard({ initialSection = "home" }: { initialSection?:
   }
 
   function runToolIntoChat(tool: AgentToolId) {
-    if (!currentReport || asking) return;
-    const { response, invocation } = runToolThroughGateway(currentReport, tool);
-    setMessages((prev) => [...prev, { id: nextMessageId(), role: "user", content: sectionPrompt[tool] }]);
-    setAsking(true);
-    window.setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        { id: nextMessageId(), role: "assistant", content: response.text, card: response.card },
-      ]);
-      setInvocations((prev) => [...prev, invocation]);
-      setAsking(false);
-    }, 450);
+    // Route through the same server path as typed questions so the card is
+    // backed by a live read from the connected app when available.
+    void ask(sectionPrompt[tool]);
   }
 
   function startPlanning() {

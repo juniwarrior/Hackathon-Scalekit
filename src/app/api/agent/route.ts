@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { routeAgentMessage } from "@/lib/oyechef-agent/agent";
 import { callModel, getModelStatus } from "@/lib/oyechef-agent/model";
 import { createOyeChefMemory } from "@/lib/oyechef-agent/memory";
+import {
+  getConnectedConnectorIds,
+  isScalekitLive,
+  readClients,
+  readInventory,
+  readReservations,
+  type LiveRead,
+} from "@/lib/scalekit/live";
+import type { ConnectorId } from "@/lib/oyechef-agent/types";
 import type { WeeklyPlan } from "@/lib/oyechef-agent/types";
 
 /**
@@ -20,6 +29,30 @@ export async function POST(request: Request) {
 
   const routed = routeAgentMessage(plan, question);
 
+  // Live reads: when the relevant connector is authorized, retrieve from the
+  // real app (Calendar / Sheets / Airtable) instead of the mock plan.
+  let liveLines: string[] = [];
+  if (isScalekitLive() && routed.card) {
+    const connected = new Set<ConnectorId>(await getConnectedConnectorIds());
+    const tool = routed.card.tool;
+    let live: LiveRead | null = null;
+    if (tool === "reservations" && connected.has("google_calendar")) live = await readReservations();
+    else if (tool === "inventory" && connected.has("google_sheets")) live = await readInventory();
+    else if (tool === "clients" && connected.has("crm")) live = await readClients();
+    if (live) {
+      liveLines = live.items;
+      routed.card = {
+        tool: routed.card.tool,
+        kind: "list",
+        title: `${routed.card.title} (live)`,
+        subtitle: `${live.count} records · live from ${live.source}`,
+        toolLabel: live.source,
+        items: live.items,
+        footnote: `Retrieved live from ${live.source} via Scalekit.`,
+      };
+    }
+  }
+
   // Memory tool: recall from Actian VectorAI (agent memory), not the live sources.
   let memoryLines: string[] = [];
   if (routed.card?.tool === "memory") {
@@ -36,6 +69,7 @@ export async function POST(request: Request) {
     `Week: ${plan.weekLabel}`,
     `Reservations ${plan.summary.reservationCount}, guests ${plan.summary.expectedGuests}, revenue $${plan.summary.expectedRevenue}, occupancy ${plan.summary.occupancyPercentage}%, purchase orders ${plan.summary.purchaseOrderCount}, ${plan.summary.waitersCount} waiters / ${plan.summary.cooksCount} cooks.`,
     `Relevant data for this question: ${routed.text}`,
+    liveLines.length ? `LIVE data retrieved from the connected app:\n- ${liveLines.join("\n- ")}` : "",
     memoryLines.length ? `Agent memory (Actian):\n- ${memoryLines.join("\n- ")}` : "",
   ]
     .filter(Boolean)
