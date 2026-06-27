@@ -354,7 +354,7 @@ export function OyeChefDashboard({ initialSection = "home" }: { initialSection?:
               <Utensils className="h-4.5 w-4.5" />
             </span>
             <div className="leading-tight">
-              <p className="text-sm font-semibold">OyeChef</p>
+              <p className="text-sm font-semibold">HeyChef</p>
               <p className="text-xs text-sidebar-foreground/60">Ops Agent</p>
             </div>
           </div>
