@@ -208,15 +208,17 @@ export function OyeChefDashboard({ initialSection = "home" }: { initialSection?:
     setInvocations(run.invocations);
     setPlanStatus("complete");
 
+    const summaryId = nextMessageId();
+    const activityId = nextMessageId();
     setMessages([
       {
-        id: nextMessageId(),
+        id: summaryId,
         role: "assistant",
         content: `Done — I planned ${plan.weekLabel} autonomously through your connected tools. Here's the snapshot:`,
         card: runAgentTool(plan, "summary").card,
       },
       {
-        id: nextMessageId(),
+        id: activityId,
         role: "assistant",
         content: "",
         activity: run.invocations,
@@ -229,12 +231,13 @@ export function OyeChefDashboard({ initialSection = "home" }: { initialSection?:
       ...buildReportCards(plan),
     ]);
 
-    // Ask the multi-agent model panel for the written report (server-side),
-    // then append it when it returns. Never blocks the deterministic report.
-    void fetchNarrative();
+    // The server reads the live apps + runs the multi-agent report; when it
+    // returns, update the snapshot + activity with live counts and append the
+    // narrative. Never blocks the instant deterministic report.
+    void fetchServerPlan(summaryId, activityId);
   }
 
-  async function fetchNarrative() {
+  async function fetchServerPlan(summaryId: string, activityId: string) {
     try {
       const response = await fetch("/api/plan-week", {
         method: "POST",
@@ -242,14 +245,24 @@ export function OyeChefDashboard({ initialSection = "home" }: { initialSection?:
         body: JSON.stringify({}),
       });
       if (!response.ok) return;
-      const data = (await response.json()) as { narrative?: WeeklyReportNarrative };
-      if (!data.narrative) return;
-      setMessages((prev) => [
-        ...prev,
-        { id: nextMessageId(), role: "assistant", content: "", narrative: data.narrative },
-      ]);
+      const data = (await response.json()) as {
+        plan?: WeeklyPlan;
+        invocations?: ToolInvocation[];
+        narrative?: WeeklyReportNarrative;
+      };
+      if (data.invocations) setInvocations(data.invocations);
+      setMessages((prev) => {
+        const updated = prev.map((m) => {
+          if (m.id === summaryId && data.plan) return { ...m, card: runAgentTool(data.plan, "summary").card };
+          if (m.id === activityId && data.invocations) return { ...m, activity: data.invocations };
+          return m;
+        });
+        return data.narrative
+          ? [...updated, { id: nextMessageId(), role: "assistant" as const, content: "", narrative: data.narrative }]
+          : updated;
+      });
     } catch {
-      /* model offline — deterministic report already shown */
+      /* offline — deterministic report already shown */
     }
   }
 
